@@ -1,0 +1,249 @@
+#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+#AutoIt3Wrapper_Icon=ssd_logo.ico
+#AutoIt3Wrapper_Outfile=SSDsw.exe
+#AutoIt3Wrapper_Compression=4
+#AutoIt3Wrapper_UseUpx=n
+#AutoIt3Wrapper_Res_Comment=© SSD - SetSoundDevice on Win7 by KaFu. All rights reserved. http://www.funk.eu
+#AutoIt3Wrapper_Res_Description=SetSoundDevice on Vista & Win7
+#AutoIt3Wrapper_Res_Fileversion=1.1.0.1
+#AutoIt3Wrapper_Res_LegalCopyright=Creative Commons License "by-nc-sa 3.0", this program is freeware under Creative Commons License "by-nc-sa 3.0" (http://creativecommons.org/licenses/by-nc-sa/3.0/us/)
+#AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
+://////=__=
+://////=__=
+://////=__=
+://////=__=
+#AutoIt3Wrapper_Run_Obfuscator=y
+#Obfuscator_Parameters=/sf /sv /om /cs=0 /cn=0
+#EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
+
+#cs
+    ######################################
+
+    SSD - SetSoundDevice on Win7
+    Script Version: 1.1.0.0
+    KaFu 2010
+    15 Jan 2011
+
+    AutoIt Version: 3.3.6.1
+
+    ######################################
+#ce
+
+#region ;----- Includes -----
+
+_EnforceSingleInstance('3681182c-6d24-4558-b089-1fedb289d81c') ; any 'unique' string; created with http://www.guidgen.com/Index.aspx
+
+#include <Winapi.au3>
+#include <_EnumChildWindows.au3>
+#include <_GetPlatformCompatabillity.au3>
+#include <WindowsConstants.au3>
+#include <GUIConstantsEx.au3>
+#include <ComboConstants.au3>
+#include <Misc.au3>
+
+Global $sGUITitle = "SSD - SetSoundDevice on Win7 - v1.1"
+
+If $i_PlatformCompatabillity < $Macro_Sys2008 Then
+    MsgBox(16 + 262144, $sGUITitle & " - Info", "SSD works on Win7 (maybe Vista, but untested) only.")
+    Exit
+EndIf
+
+#cs
+If @AutoItX64 = 0 Then
+    $sGUITitle &= " - 32bit"
+Else
+    $sGUITitle &= " - 64bit"
+EndIf
+#ce
+
+Global $hWnd_Sound, $iPID_Sound, $timer_timeout, $iDeviceNo = 0
+
+If $CmdLine[0] > 0 Then
+    $iDeviceNo = $CmdLine[1]
+EndIf
+
+;~ $iDeviceNo = "sw1|3"
+
+$timer_timeout = TimerInit()
+While ProcessExists("rundll32.exe")
+    ProcessClose("rundll32.exe")
+    If TimerDiff($timer_timeout) > 5000 Then _Exit_Error()
+    Sleep(250)
+WEnd
+
+$iPID_Sound = Run("rundll32.exe shell32.dll,Control_RunDLL mmsys.cpl,,0")
+
+$timer_timeout = TimerInit()
+While Not IsHWnd($hWnd_Sound)
+    $hWnd_Sound = _Detect_Sound_dialog_hWnd($iPID_Sound)
+    If TimerDiff($timer_timeout) > 5000 Or Not ProcessExists($iPID_Sound) Then
+        _Exit()
+    EndIf
+WEnd
+
+$aEnumList = _EnumChildWindows($hWnd_Sound, 0, 0, "SysListView32")
+If $aEnumList[0][0] = 1 Then
+    If StringLeft($iDeviceNo,2) = "sw" And WinExists($hWnd_Sound) Then
+
+        $aSw = StringSplit(StringTrimLeft($iDeviceNo,2),"|",3)
+        If @error = 0 And UBound($aSw) > 1 Then
+
+            $iListviewSize = ControlListView($aEnumList[1][0], "", 0, "GetItemCount")
+            If Not ($iListviewSize > 0) Then
+                MsgBox(16 + 262144, $sGUITitle & " - Error", "No rows found in SysListView32 control of the 'Sound' control panel dialog.")
+                _Exit()
+            EndIf
+            For $i = 0 To $iListviewSize - 1
+                If StringInStr(ControlListView($aEnumList[1][0], "", 0, "GetText", $i, 2), "Standard") Then
+                    $i+= 1
+                    If $i > UBound($aSw) - 1 Then $i = 0
+                    ControlSend($hWnd_Sound, "", "", "{DOWN " & $aSw[$i] & "}")
+                    ControlClick($hWnd_Sound, "", "Button2")
+                    ControlClick($hWnd_Sound, "", "Button4")
+                EndIf
+            Next
+
+        else
+            MsgBox(16 + 262144, $sGUITitle & " - Error", "Switch command string badly formatted: "&$iDeviceNo&@CRLF&"Format: sw{DeviceNumber1}|{DeviceNumber1}"& @CRLF& "Example: SSD.exe sw1|3" )
+        EndIf
+
+    ElseIf $iDeviceNo = 0 Then
+        $iListviewSize = ControlListView($aEnumList[1][0], "", 0, "GetItemCount")
+        If Not $iListviewSize > 0 Then
+            MsgBox(16 + 262144, $sGUITitle & " - Error", "No rows found in SysListView32 control of the 'Sound' control panel dialog.")
+            _Exit()
+        EndIf
+        Dim $aSoundDevices[$iListviewSize]
+        For $i = 0 To $iListviewSize - 1
+            For $y = 0 To 2
+                $aSoundDevices[$i] &= ControlListView($aEnumList[1][0], "", 0, "GetText", $i, $y)
+                If $y < 2 Then $aSoundDevices[$i] &= ", "
+            Next
+            ConsoleWrite($aSoundDevices[$i] & @CRLF)
+        Next
+
+        GUICreate($sGUITitle, 400, 180)
+        GUISetBkColor(0xffffff)
+
+        GUICtrlCreateIcon(@ScriptName, 0, 6, 4, 32, 32)
+        GUICtrlCreateLabel("SSD - SetSoundDevice on Win7", 45, 9, 380, 20)
+        GUICtrlSetFont(-1, 14, 800, 0, "Arial", 6)
+
+        $c_label_Hyperlink_FunkEu = GUICtrlCreateLabel("http://www.funk.eu", 285, 29, 98, 17)
+        GUICtrlSetColor($c_label_Hyperlink_FunkEu, 0xA7A6AA)
+        GUICtrlSetFont($c_label_Hyperlink_FunkEu, 8.5, 400, 4, "Arial")
+        GUICtrlSetColor($c_label_Hyperlink_FunkEu, 0x518CB8)
+        GUICtrlSetCursor($c_label_Hyperlink_FunkEu, 0)
+
+        GUICtrlCreateLabel("SSD enables you to change the default Sound Device for Vista && Win7 via the commandline. To call SSD from the commandline, the syntax is 'SSD.exe #' (where # is the number of the Sound Device to select from the list,'Select Default' dropdown box must be enabled to make device selectable). Select Sound Device # to set as default:", 10, 10 + 40, 372, 70)
+        GUICtrlSetFont(-1, 8.5, 400, 0, "Arial")
+        $c_combo_devices = GUICtrlCreateCombo("", 10, 82 + 43, 380, 20, $CBS_DROPDOWNLIST)
+        For $i = 0 To UBound($aSoundDevices) - 1
+            GUICtrlSetData($c_combo_devices, $aSoundDevices[$i])
+        Next
+        For $i = 0 To UBound($aSoundDevices) - 1
+            If StringInStr($aSoundDevices[$i], "Standard") Then GUICtrlSetData($c_combo_devices, $aSoundDevices[$i])
+        Next
+
+        $c_checkbox_create_shortcut = GUICtrlCreateCheckbox("Create shortcut in program directory", 10, 113 + 40, 190)
+        GUICtrlSetFont(-1, 8.5, 400, 0, "Arial")
+        GUICtrlSetState(-1, $GUI_CHECKED)
+
+        $c_button_start = GUICtrlCreateButton("Change Default Sound Device", 212, 114 + 40, 180, 20)
+        GUICtrlSetFont(-1, 8.5, 400, 0, "Arial")
+
+        $h_DLL_User32 = DllOpen("User32.dll")
+        OnAutoItExitRegister("_OnAutoitExitSSD")
+
+        GUIRegisterMsg($WM_COMMAND, "My_WM_COMMAND")
+        GUISetState(@SW_SHOW)
+
+        While 1
+            Switch GUIGetMsg()
+                Case $GUI_EVENT_CLOSE
+                    GUIDelete()
+                    _Exit()
+                Case $c_button_start
+                    ExitLoop
+            EndSwitch
+            If Not WinExists($hWnd_Sound) Then _Exit()
+        WEnd
+        For $i = 0 To UBound($aSoundDevices) - 1
+            If GUICtrlRead($c_combo_devices) = $aSoundDevices[$i] Then
+                $iDeviceNo = $i + 1
+                If GUICtrlRead($c_checkbox_create_shortcut) = $GUI_CHECKED Then
+                    FileCreateShortcut(@ScriptDir & "" & @ScriptName, @ScriptDir & "SSD - #" & $iDeviceNo & " " & StringLeft($aSoundDevices[$i], StringInStr($aSoundDevices[$i], ", ") - 1) & ".lnk", @ScriptDir, $iDeviceNo, "SSD commandline shortcut", @ScriptDir & "" & @ScriptName, "", "0", @SW_MINIMIZE)
+                EndIf
+            EndIf
+        Next
+        GUIDelete()
+    ElseIf $iDeviceNo > 0 And WinExists($hWnd_Sound) Then
+        ControlSend($hWnd_Sound, "", "", "{DOWN " & $iDeviceNo & "}")
+        ControlClick($hWnd_Sound, "", "Button2")
+        ControlClick($hWnd_Sound, "", "Button4")
+    EndIf
+Else
+    MsgBox(16 + 262144, $sGUITitle & " - Error", "SysListView32 control in 'Sound' control panel dialog not found.")
+EndIf
+
+_Exit()
+
+Func _Detect_Sound_dialog_hWnd($iPID)
+    Local $hWnds = WinList("[CLASS:#32770;]", "")
+    For $i = 1 To $hWnds[0][0]
+        If BitAND(WinGetState($hWnds[$i][1], ''), 2) Then
+            If WinGetProcess(_WinAPI_GetAncestor($hWnds[$i][1], $GA_ROOTOWNER)) = ProcessExists($iPID) Then
+                Return $hWnds[$i][1]
+            EndIf
+        EndIf
+    Next
+    Return 0
+EndFunc   ;==>_Detect_Sound_dialog_hWnd
+
+Func _EnforceSingleInstance($GUID_Program)
+    If $GUID_Program = "" Then Return SetError(1, '', 1)
+    If IsHWnd(WinGetHandle($GUID_Program)) Then ProcessClose(WinGetProcess(WinGetHandle($GUID_Program), ""))
+    AutoItWinSetTitle($GUID_Program)
+    Return WinGetHandle($GUID_Program)
+EndFunc   ;==>_EnforceSingleInstance
+
+Func _Exit()
+    $timer_timeout = TimerInit()
+    While ProcessExists($iPID_Sound)
+        ProcessClose($iPID_Sound)
+        If TimerDiff($timer_timeout) > 5000 Then
+            _Exit_Error()
+        EndIf
+        Sleep(250)
+    WEnd
+    Exit
+EndFunc   ;==>_Exit
+
+Func _Exit_Error()
+    If Not ProcessExists($iPID_Sound) Then
+        If ProcessExists("rundll32.exe") Then $iPID_Sound = ProcessExists("rundll32.exe")
+    EndIf
+    If ProcessExists($iPID_Sound) Then MsgBox(16 + 262144, $sGUITitle & " - Error", "The process rundll32.exe with the PID " & $iPID_Sound & "could not be closed by SSD." & @CRLF & @CRLF & "SSD will exit now, close the process via Taskmanager.")
+    Exit
+EndFunc   ;==>_Exit_Error
+
+Func _OnAutoitExitSSD()
+    DllClose($h_DLL_User32)
+EndFunc   ;==>_OnAutoitExitSSD
+
+Func MY_WM_COMMAND($hWnd, $Msg, $wParam, $lParam)
+    Local $iIDFrom = BitAND($wParam, 0xFFFF) ;LoWord
+    Local $iCode = BitShift($wParam, 16) ;HiWord
+
+    Switch $iIDFrom
+
+        Case $c_label_Hyperlink_FunkEu
+            GUICtrlSetColor($c_label_Hyperlink_FunkEu, 0xFF0000)
+            While _IsPressed("01", $h_DLL_User32)
+                Sleep(10)
+            WEnd
+            GUICtrlSetColor($c_label_Hyperlink_FunkEu, 0x518CB8)
+            ShellExecute('http://www.funk.eu/')
+
+    EndSwitch
+EndFunc   ;==>MY_WM_COMMAND
